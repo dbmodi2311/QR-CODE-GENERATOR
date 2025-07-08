@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bulk QR Code Generator</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome for Icons (e.g., QR code icon) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- QR Code Library -->
+    <script src="https://cdn.jsdelivr.net/npm/davidshimjs-qrcodejs@0.0.2/qrcode.min.js"></script>
+    <!-- JSZip for zipping files -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- FileSaver.js for saving the zip file -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            /* Milky Titanium White Liquid Glass Background Gradient */
+            background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%); /* Very soft creamy white to light cool gray */
+            padding: 1rem;
+            padding-top: 5rem; /* Space for the fixed top bar */
+            opacity: 1; /* Always visible as no login is required */
+        }
+
+        /* Base Glassmorphism Effect for containers */
+        .glass-container {
+            background-color: rgba(255, 255, 255, 0.4); /* Slightly less opaque for more depth */
+            backdrop-filter: blur(25px); /* Stronger blur for more pronounced effect */
+            -webkit-backdrop-filter: blur(25px); /* For Safari */
+            border: 1px solid rgba(255, 255, 255, 0.6); /* Clearer, light border */
+            border-radius: 1.5rem; /* Consistent rounded corners */
+            box-shadow: 0 15px 60px 0 rgba(0, 0, 0, 0.1); /* Softer, subtle shadow */
+        }
+
+        /* Specific adjustments for elements */
+        #qrcodePreview {
+            position: relative;
+            display: flex;
+            flex-direction: column; /* Arrange items vertically */
+            justify-content: center;
+            align-items: center;
+            padding: 1rem;
+            background-color: rgba(255, 255, 255, 0.5); /* Slightly more opaque for QR code */
+            border-radius: 0.75rem;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.03); /* Even softer inner shadow */
+            margin-top: 1.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.7); /* Clearer border */
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            min-height: 250px; /* Ensure enough space for QR and text */
+        }
+
+        #qrcodePreview .qr-text-display {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #333333;
+            margin-top: 0.5rem; /* Space between QR and text */
+            text-align: center;
+            max-width: 90%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        textarea, input[type="text"] {
+            background-color: rgba(255, 255, 255, 0.3); /* More visible translucent background */
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            color: #333333; /* Darker text for readability on light background */
+            resize: vertical;
+            min-height: 150px;
+            transition: all 0.3s ease-in-out;
+        }
+        textarea::placeholder, input[type="text"]::placeholder {
+            color: rgba(51, 51, 51, 0.5); /* Darker placeholder text */
+        }
+        textarea:focus, input[type="text"]:focus {
+            background-color: rgba(255, 255, 255, 0.4);
+            border-color: rgba(255, 255, 255, 0.8);
+            box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.4);
+        }
+
+        button {
+            /* Professional button gradient: Deep Blue to Light Blue (kept for contrast) */
+            background: linear-gradient(135deg, #2193b0, #6dd5ed);
+            border: none;
+            color: white;
+            font-weight: 600;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+            transition: all 0.3s ease-in-out;
+        }
+        button:hover {
+            transform: translateY(-2px) scale(1.02);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+            background: linear-gradient(135deg, #6dd5ed, #2193b0); /* Reverse gradient on hover */
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Custom spinner for loading state */
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.3); /* Darker spinner for light background */
+            border-left-color: #333333;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 8px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Top-Left Preview Status Tab */
+        #previousQrTab {
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            background-color: rgba(255, 255, 255, 0.3); /* Translucent */
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            padding: 0.75rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+            display: flex;
+            align-items: center;
+            z-index: 50;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out, transform 0.2s ease-in-out;
+        }
+        #previousQrTab:hover {
+            background-color: rgba(255, 255, 255, 0.4); /* Lighten on hover */
+            transform: translateY(-2px);
+        }
+
+        #previousQrTab .line {
+            width: 1.25rem;
+            height: 0.125rem;
+            background-color: rgba(0, 0, 0, 0.4); /* Darker lines for contrast */
+            margin-top: 0.125rem;
+            margin-bottom: 0.125rem;
+            border-radius: 9999px;
+        }
+
+        /* Modal styles */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.2); /* Lighter overlay for light theme */
+            display: none; /* Hidden by default */
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+        }
+        .modal.show {
+            display: flex; /* Show when 'show' class is added */
+            opacity: 1;
+            visibility: visible;
+        }
+        .modal-content {
+            background-color: rgba(255, 255, 255, 0.98); /* Very opaque for content */
+            backdrop-filter: blur(35px);
+            -webkit-backdrop-filter: blur(35px);
+            border: 1px solid rgba(255, 255, 255, 0.9);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15); /* Softer shadow */
+            padding: 2.5rem; /* Increased padding */
+            border-radius: 1rem; /* Slightly more rounded */
+            max-width: 90%;
+            max-height: 80%;
+            overflow-y: auto;
+            position: relative;
+            width: 550px; /* Slightly wider modal */
+        }
+        .modal-close-btn {
+            color: #666666; /* Darker gray for close button */
+            background-color: rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            width: 35px; /* Larger close button */
+            height: 35px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            font-size: 1.75rem; /* Larger icon */
+            cursor: pointer;
+            border: none;
+        }
+        .modal-close-btn:hover {
+            color: #333333;
+            background-color: rgba(255, 255, 255, 1);
+        }
+        .history-item {
+            background-color: rgba(0, 0, 0, 0.03); /* Very subtle dark background for items */
+            border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+            border-radius: 0.5rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            padding: 0.75rem;
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out;
+        }
+        .history-item:last-child {
+            border-bottom: none;
+        }
+        .history-item:hover {
+            background-color: rgba(0, 0, 0, 0.06);
+        }
+        .history-item img {
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            width: 60px;
+            height: 60px;
+            margin-right: 1rem;
+            border-radius: 0.25rem;
+            flex-shrink: 0;
+            object-fit: contain;
+        }
+        .history-item-details {
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .history-item-text {
+            font-size: 0.9rem;
+            color: #333333; /* Darker text for readability on lighter modal background */
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .history-item-timestamp {
+            font-size: 0.75rem;
+            color: #666666; /* Lighter gray for timestamp */
+            margin-top: 0.2rem;
+        }
+
+        /* Text colors for overall theme */
+        h1, h2 {
+            color: #333333; /* Dark headings for contrast on light background */
+            text-shadow: 0 1px 1px rgba(255, 255, 255, 0.3); /* Subtle light shadow */
+        }
+        p, li {
+            color: #333333; /* Dark body text */
+        }
+        strong {
+            color: #222222; /* Stronger dark for emphasis */
+        }
+        .text-gray-600 { /* Override for main description */
+            color: #333333;
+        }
+        .text-gray-500 { /* Override for preview placeholder */
+            color: #666666;
+        }
+        .text-gray-400 { /* Override for QR Code Preview label */
+            color: #999999;
+        }
+        .text-blue-700 { /* Override for instructions heading - now dark */
+            color: #333333;
+        }
+        .text-blue-600 { /* Override for instructions strong text - now dark */
+            color: #222222;
+        }
+
+        /* Message box colors adjusted for theme */
+        #messageBox {
+            background-color: rgba(255, 255, 255, 0.7);
+            border-color: rgba(255, 255, 255, 0.9);
+            color: #333333;
+            text-shadow: 0 1px 0px rgba(255, 255, 255, 0.2);
+        }
+        /* Adjusted specific message box colors for the new theme */
+        #messageBox.bg-red-500 { background-color: rgba(255, 99, 71, 0.4); border-color: rgba(255, 99, 71, 0.6); color: #333; }
+        #messageBox.text-red-700 { color: #333; }
+        #messageBox.bg-green-500 { background-color: rgba(50, 205, 50, 0.4); border-color: rgba(50, 205, 50, 0.6); color: #333; }
+        #messageBox.text-green-700 { color: #333; }
+        #messageBox.bg-blue-500 { background-color: rgba(100, 149, 237, 0.4); border-color: rgba(100, 149, 237, 0.6); color: #333; }
+        #messageBox.text-blue-700 { color: #333; }
+
+    </style>
+</head>
+<body class="p-4">
+
+    <!-- Top-Left Preview Status Tab -->
+    <div id="previousQrTab" title="Generation History">
+        <div class="flex flex-col mr-3">
+            <div class="line"></div>
+            <div class="line"></div>
+            <div class="line"></div>
+        </div>
+    </div>
+
+    <!-- Main Application Container -->
+    <div class="max-w-xl w-full p-8 rounded-xl shadow-2xl flex flex-col items-center glass-container">
+        <!-- Header Section -->
+        <div class="flex items-center mb-6 text-blue-700">
+            <i class="fas fa-qrcode text-4xl mr-3"></i>
+            <h1 class="text-4xl font-extrabold">Bulk QR Code Generator</h1>
+        </div>
+
+        <p class="mb-6 text-center leading-relaxed">
+            Effortlessly generate multiple QR codes. Enter each text or URL on a new line below.
+            Each line will be converted into a unique QR code and bundled into a convenient zip file.
+        </p>
+
+        <!-- Input Textarea for Bulk Input -->
+        <textarea
+            id="qrInput"
+            placeholder="Enter text or URLs here, one per line (e.g., website.com, productID123, invoice#456)..."
+            class="w-full p-4 border rounded-lg focus:outline-none focus:ring-3 mb-6 shadow-sm transition duration-200 ease-in-out"
+            rows="10"
+        ></textarea>
+
+        <!-- Generate Button -->
+        <button
+            id="generateAllBtn"
+            class="w-full font-semibold py-3 px-6 rounded-lg shadow-lg transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-3 flex items-center justify-center"
+        >
+            <i class="fas fa-magic mr-2"></i>
+            Generate All QR Codes & Download Zip
+        </button>
+
+        <!-- Instructions Section -->
+        <div class="w-full mt-8 p-6 rounded-lg shadow-inner glass-container">
+            <h2 class="text-2xl font-bold mb-4 text-center">How to Generate Your QR Codes:</h2>
+            <ul class="list-disc list-inside space-y-3 text-sm">
+                <li>
+                    <strong class="text-blue-600">Input Data:</strong> In the provided text area, enter the data (text or URLs) for which you wish to generate QR codes. <strong class="text-blue-600">Each distinct data entry must be placed on a new line.</strong>
+                </li>
+                <li>
+                    <strong class="text-blue-600">Initiate Generation:</strong> Click the "<strong class="text-blue-600">Generate All QR Codes & Download Zip</strong>" button. The application will then process each entry, with progress updates displayed above the preview area.
+                </li>
+                <li>
+                    <strong class="text-blue-600">Download Archive:</strong> Upon completion, a compressed file named `qr_codes_by_content.zip` will automatically download to your system.
+                </li>
+                <li>
+                    <strong class="text-blue-600">Access QR Codes:</strong> Open the downloaded `.zip` file. It contains individual PNG image files, each named according to its embedded content for straightforward identification.
+                </li>
+            </ul>
+        </div>
+
+        <!-- Status/Message Box -->
+        <div id="messageBox" class="mt-6 p-4 rounded-lg hidden w-full text-center flex items-center justify-center" role="alert">
+            <!-- Messages will be displayed here -->
+        </div>
+
+        <!-- Single QR Code Preview -->
+        <div id="qrcodePreview" class="w-full max-w-xs mt-6 rounded-lg p-4 flex flex-col justify-center items-center h-64">
+            <!-- The preview label will be absolutely positioned here -->
+            <p class="absolute top-2 right-2 text-xs">QR Code Preview</p>
+            <!-- No initial placeholder text here -->
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="mt-8 text-sm text-center text-gray-700">
+        &copy; 2025 Bulk QR Code Generator. All rights reserved.
+    </footer>
+
+    <!-- Generation History Modal -->
+    <div id="historyModal" class="modal">
+        <div class="modal-content glass-container">
+            <button class="modal-close-btn" id="closeHistoryModal">&times;</button>
+            <h2 class="text-2xl font-bold text-gray-800 mb-4 text-center">Generation History</h2>
+            <ul id="historyList" class="space-y-2">
+                <!-- History items will be inserted here by JavaScript -->
+            </ul>
+            <p id="noHistoryMessage" class="text-gray-500 text-center mt-4 hidden">No QR codes generated yet.</p>
+        </div>
+    </div>
+
+    <script>
+        // Get references to DOM elements
+        const qrInput = document.getElementById('qrInput');
+        const generateAllBtn = document.getElementById('generateAllBtn');
+        const qrcodePreviewDiv = document.getElementById('qrcodePreview');
+        const messageBox = document.getElementById('messageBox');
+        const previousQrTab = document.getElementById('previousQrTab');
+        const historyModal = document.getElementById('historyModal');
+        const closeHistoryModalBtn = document.getElementById('closeHistoryModal');
+        const historyList = document.getElementById('historyList');
+        const noHistoryMessage = document.getElementById('noHistoryMessage');
+
+        // Array to store history of generated QR codes (local copy)
+        // Each item will be { text: '...', dataUrl: '...', timestamp: '...' }
+        let qrHistory = [];
+        const MAX_HISTORY_ITEMS = 20; // Limit history to prevent excessive memory usage
+
+        // Helper function to format date and time
+        function formatDateTime(date) {
+            const options = {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true
+            };
+            return new Intl.DateTimeFormat('en-US', options).format(date);
+        }
+
+        // Function to show a message in the message box
+        function showMessage(message, type = 'info', showSpinner = false) {
+            messageBox.innerHTML = ''; // Clear previous content
+            if (showSpinner) {
+                const spinner = document.createElement('div');
+                spinner.className = 'spinner';
+                messageBox.appendChild(spinner);
+            }
+            const textNode = document.createTextNode(message);
+            messageBox.appendChild(textNode);
+
+            // Apply theme-specific colors
+            let bgColorClass = '';
+            let borderColorClass = '';
+            let textColorClass = 'text-white'; // Default white text for messages
+
+            // Adjusted specific message box colors for the new theme
+            if (type === 'error') {
+                bgColorClass = 'bg-red-500';
+                borderColorClass = 'border-red-600';
+                textColorClass = 'text-white';
+            } else if (type === 'success') {
+                bgColorClass = 'bg-green-500';
+                borderColorClass = 'border-green-600';
+                textColorClass = 'text-white';
+            } else { // info
+                bgColorClass = 'bg-blue-500';
+                borderColorClass = 'border-blue-600';
+                textColorClass = 'text-white';
+            }
+
+            messageBox.className = `mt-6 p-4 rounded-lg w-full text-center flex items-center justify-center ${bgColorClass} ${borderColorClass} ${textColorClass} glass-container`;
+            messageBox.classList.remove('hidden');
+        }
+
+
+        // Function to hide the message box
+        function hideMessageBox() {
+            messageBox.classList.add('hidden');
+        }
+
+        // Function to sanitize text for use as a filename
+        function sanitizeFilename(text) {
+            // Replace invalid characters with underscores
+            let sanitized = text.replace(/[^a-zA-Z0-9_\-.]/g, '_');
+            // Trim to a reasonable length to avoid excessively long filenames
+            sanitized = sanitized.substring(0, 50); // Limit to 50 characters
+            // Remove leading/trailing underscores or hyphens
+            sanitized = sanitized.replace(/^[_\-]+|[_\-]+$/g, '');
+            return sanitized || 'untitled'; // Fallback if empty after sanitizing
+        }
+
+        // Function to generate a single QR code canvas
+        function createQRCodeCanvas(text) {
+            // Create a temporary div to render the QR code into
+            const tempDiv = document.createElement('div');
+            // Use a unique ID for the temporary div to avoid conflicts
+            const uniqueId = 'tempQrDiv_' + Math.random().toString(36).substring(2, 9);
+            tempDiv.id = uniqueId;
+            document.body.appendChild(tempDiv); // Append to body temporarily
+
+            // Generate QR code into the temporary div
+            new QRCode(tempDiv, {
+                text: text,
+                width: 256,
+                height: 256,
+                colorDark: "#2d3748", /* Dark blue-gray for QR modules */
+                colorLight: "#f8f8f8", /* Very light creamy white for QR background */
+                correctLevel: QRCode.CorrectLevel.H
+            });
+
+            // Find the canvas element inside the temporary div
+            const canvas = tempDiv.querySelector('canvas');
+            // Remove the temporary div from the DOM
+            document.body.removeChild(tempDiv);
+            return canvas;
+        }
+
+        // Function to display a QR code in the main preview area with text
+        function displayQrInMainPreview(dataUrl, textContent) {
+            const absoluteText = qrcodePreviewDiv.querySelector('.absolute');
+            qrcodePreviewDiv.innerHTML = ''; // Clear existing content
+
+            // Create and append the image element (QR code) first
+            const img = document.createElement('img');
+            img.src = dataUrl;
+            img.alt = "Generated QR Code";
+            img.className = "w-48 h-48 object-contain"; // Tailwind classes for image size
+            qrcodePreviewDiv.appendChild(img);
+
+            // Create and append the text element below the QR code
+            const textDisplay = document.createElement('p');
+            textDisplay.className = "qr-text-display"; // Apply styling for text
+            textDisplay.textContent = textContent;
+            qrcodePreviewDiv.appendChild(textDisplay);
+
+            if (absoluteText) {
+                qrcodePreviewDiv.appendChild(absoluteText); // Re-add the "QR Code Preview" label
+            }
+        }
+
+        // Function to generate all QR codes and download as a zip
+        async function generateAllQRCodes() {
+            const lines = qrInput.value.trim().split('\n').filter(line => line.trim() !== ''); // Get lines, filter empty ones
+
+            if (lines.length === 0) {
+                showMessage('Please enter some text or URLs in the textarea to generate QR codes.', 'error');
+                return;
+            }
+
+            showMessage(`Generating ${lines.length} QR codes... This may take a moment.`, 'info', true); // Show spinner
+            generateAllBtn.disabled = true; // Disable button during generation
+            generateAllBtn.classList.add('opacity-50', 'cursor-not-allowed'); // Dim button
+
+            const zip = new JSZip();
+            let generatedCount = 0;
+            let lastGeneratedQrData = { dataUrl: '', text: '' }; // To store the last QR for main preview
+
+
+            // Clear previous preview and set initial placeholder
+            qrcodePreviewDiv.innerHTML = '<p class="absolute top-2 right-2 text-gray-400 text-xs">QR Code Preview</p>'; // Keep only the label
+
+
+            for (let i = 0; i < lines.length; i++) {
+                const text = lines[i].trim();
+                if (text === '') continue; // Skip empty lines that might have passed filter
+
+                try {
+                    const canvas = createQRCodeCanvas(text);
+                    if (canvas) {
+                        // Convert canvas to PNG data URL
+                        const dataUrl = canvas.toDataURL('image/png');
+                        // Extract base64 data part
+                        const base64Data = dataUrl.replace(/^data:image\/(png|jpg);base64,/, "");
+
+                        // Add to history with timestamp
+                        qrHistory.unshift({ text: text, dataUrl: dataUrl, timestamp: new Date().toISOString() }); // Add to the beginning
+                        if (qrHistory.length > MAX_HISTORY_ITEMS) {
+                            qrHistory.pop(); // Remove oldest if history limit exceeded
+                        }
+
+                        // Sanitize the text to create a valid filename
+                        const sanitizedText = sanitizeFilename(text);
+                        // Add to zip file with a filename based on the content
+                        const fileName = `qr_${sanitizedText}_${i + 1}.png`;
+                        zip.file(fileName, base64Data, { base64: true });
+                        generatedCount++;
+
+                        // Store the data URL and text of the last generated QR code for main preview
+                        if (i === lines.length - 1) {
+                            lastGeneratedQrData = { dataUrl: dataUrl, text: text };
+                        }
+                    }
+                } catch (error) {
+                    console.error(`Error generating QR code for line ${i + 1}: "${text}"`, error);
+                    // Continue even if one fails, log the error
+                }
+                showMessage(`Generated ${generatedCount} of ${lines.length} QR codes. Zipping...`, 'info', true);
+            }
+
+            if (generatedCount === 0) {
+                showMessage('No valid QR codes were generated. Please check your input.', 'error');
+                generateAllBtn.disabled = false;
+                generateAllBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                // Revert main preview to initial state if no QR codes were generated
+                qrcodePreviewDiv.innerHTML = '<p class="absolute top-2 right-2 text-gray-400 text-xs">QR Code Preview</p>';
+                return;
+            } else {
+                // Display the last generated QR code in the main preview
+                displayQrInMainPreview(lastGeneratedQrData.dataUrl, lastGeneratedQrData.text);
+            }
+
+            try {
+                // Generate the zip file
+                const content = await zip.generateAsync({ type: "blob" });
+                // Save the zip file
+                saveAs(content, "qr_codes_by_content.zip");
+
+                showMessage(`Successfully generated and downloaded ${generatedCount} QR codes!`, 'success');
+            } catch (error) {
+                console.error("Error zipping or downloading QR codes:", error);
+                showMessage('An error occurred while zipping or downloading the QR codes. Please try again.', 'error');
+            } finally {
+                generateAllBtn.disabled = false; // Re-enable button
+                generateAllBtn.classList.remove('opacity-50', 'cursor-not-allowed'); // Remove dimming
+            }
+        }
+
+        // Function to open the history modal
+        function openHistoryModal() {
+            historyList.innerHTML = ''; // Clear previous list
+            if (qrHistory.length === 0) {
+                noHistoryMessage.classList.remove('hidden');
+                historyList.classList.add('hidden');
+            } else {
+                noHistoryMessage.classList.add('hidden');
+                historyList.classList.remove('hidden');
+                qrHistory.forEach((item, index) => {
+                    const listItem = document.createElement('li');
+                    listItem.className = 'history-item';
+                    listItem.innerHTML = `
+                        <img src="${item.dataUrl}" alt="QR Code ${index + 1}">
+                        <div class="history-item-details">
+                            <span class="history-item-text">${item.text}</span>
+                            <span class="history-item-timestamp">${formatDateTime(new Date(item.timestamp))}</span>
+                        </div>
+                    `;
+                    listItem.addEventListener('click', () => {
+                        displayQrInMainPreview(item.dataUrl, item.text); // Pass text to display
+                        historyModal.classList.remove('show'); // Close modal after selection
+                    });
+                    historyList.appendChild(listItem);
+                });
+            }
+            historyModal.classList.add('show');
+        }
+
+        // Initial setup on window load
+        window.onload = () => {
+            qrInput.value = "https://www.google.com\nHello World!\n1234567890\nAnother line of text\nhttps://github.com/google/gemini-api-cookbook";
+            // Initial state: only the absolute positioned label in the preview div
+            qrcodePreviewDiv.innerHTML = '<p class="absolute top-2 right-2 text-gray-400 text-xs">QR Code Preview</p>';
+        };
+
+        // Event Listeners
+        generateAllBtn.addEventListener('click', generateAllQRCodes);
+        previousQrTab.addEventListener('click', openHistoryModal);
+        closeHistoryModalBtn.addEventListener('click', () => {
+            historyModal.classList.remove('show');
+        });
+
+        // Close modal if clicked outside content
+        historyModal.addEventListener('click', (e) => {
+            if (e.target === historyModal) {
+                historyModal.classList.remove('show');
+            }
+        });
+    </script>
+</body>
+</html>
